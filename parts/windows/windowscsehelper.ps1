@@ -73,6 +73,8 @@ $global:LatestContainerdPackage = "v1.7.1-azure.1/binaries/containerd-v1.7.1-azu
 # The latest containerd version that contains stable ABI
 $global:LatestContainerdPackagefor23H2 = "v1.7.9-azure.1/binaries/containerd-v1.7.9-azure.1-windows-amd64.tar.gz"
 
+$global:EventsLoggingDir = "C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.CustomScriptExtension\Events\"
+
 
 # This filter removes null characters (\0) which are captured in nssm.exe output when logged through powershell
 filter RemoveNulls { $_ -replace '\0', '' }
@@ -335,4 +337,36 @@ function Install-Containerd-Based-On-Kubernetes-Version {
     $ContainerdUrl = $ContainerdUrl + $containerdPackage
   }
   Install-Containerd -ContainerdUrl $ContainerdUrl -CNIBinDir $CNIBinDir -CNIConfDir $CNIConfDir -KubeDir $KubeDir
+}
+
+function Logs-To-Events {
+    $count = $args.Count
+    $cmd = [string]$args[1..$count]
+
+    $task = $args[0]
+    $eventsFileName=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
+    $startTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
+    Invoke-Expression $cmd
+    $ret=$?
+    $endTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
+
+    $json_string = @"
+    {
+        "Timestamp": "$startTime",
+        "OperationId": "$endTime",
+        "Version": "1.23",
+        "TaskName": "$task",
+        "EventLevel": "Informational",
+        "Message": "Completed: $cmd",
+        "EventPid": "0",
+        "EventTid": "0"
+    }
+"@
+
+    echo $json_string | Set-Content ${EventsLoggingDir}${eventsFileName}.json
+
+    if (-not $ret) {
+        return $ret
+    }
 }

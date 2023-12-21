@@ -7609,6 +7609,7 @@ param(
 )
 # Do not parse the start time from $LogFile to simplify the logic
 $StartTime=Get-Date
+$cseFormattedStartTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
 $global:ExitCode=0
 $global:ErrorMessage=""
 
@@ -7698,8 +7699,8 @@ $global:AzureCNIConfDir = [Io.path]::Combine("$global:AzureCNIDir", "netconf")
 # $global:NetworkPolicy = "{{GetParameter "networkPolicy"}}" # BUG: unused
 $global:NetworkPlugin = "{{GetParameter "networkPlugin"}}"
 $global:VNetCNIPluginsURL = "{{GetParameter "vnetCniWindowsPluginsURL"}}"
-$global:IsDualStackEnabled = {{if IsIPv6DualStackFeatureEnabled}}$true{{else}}$false{{end}}
-$global:IsAzureCNIOverlayEnabled = {{if IsAzureCNIOverlayFeatureEnabled}}$true{{else}}$false{{end}}
+$global:IsDualStackEnabled = {{if IsIPv6DualStackFeatureEnabled}}1{{else}}0{{end}}
+$global:IsAzureCNIOverlayEnabled = {{if IsAzureCNIOverlayFeatureEnabled}}1{{else}}0{{end}}
 
 # CSI Proxy settings
 $global:EnableCsiProxy = [System.Convert]::ToBoolean("{{GetVariable "windowsEnableCSIProxy" }}");
@@ -7785,7 +7786,7 @@ try
     # Download CSE function scripts
     Write-Log "Getting CSE scripts"
     $tempfile = 'c:\csescripts.zip'
-    DownloadFileOverHttp -Url $global:CSEScriptsPackageUrl -DestinationPath $tempfile -ExitCode $global:WINDOWS_CSE_ERROR_DOWNLOAD_CSE_PACKAGE
+    Logs-To-Events "AKS.WindowsCSE.DownloadCSEScriptPackageUrl" DownloadFileOverHttp -Url $global:CSEScriptsPackageUrl -DestinationPath $tempfile -ExitCode $global:WINDOWS_CSE_ERROR_DOWNLOAD_CSE_PACKAGE
     Expand-Archive $tempfile -DestinationPath "C:\\AzureData\\windows"
     Remove-Item -Path $tempfile -Force
 
@@ -7807,16 +7808,16 @@ try
     }
 
     Write-Log "Apply telemetry data setting"
-    Set-TelemetrySetting -WindowsTelemetryGUID $global:WindowsTelemetryGUID
+    Logs-To-Events "AKS.WindowsCSE.SetTelemetrySetting" Set-TelemetrySetting -WindowsTelemetryGUID $global:WindowsTelemetryGUID
 
     Write-Log "Resize os drive if possible"
-    Resize-OSDrive
+    Logs-To-Events "AKS.WindowsCSE.ResizeOSDrive" Resize-OSDrive
 
     Write-Log "Initialize data disks"
-    Initialize-DataDisks
+    Logs-To-Events "AKS.WindowsCSE.InitializeDataDisks" Initialize-DataDisks
 
     Write-Log "Create required data directories as needed"
-    Initialize-DataDirectories
+    Logs-To-Events "AKS.WindowsCSE.InitializeDataDirectories" Initialize-DataDirectories
 
     Create-Directory -FullPath "c:\k"
     Write-Log "Remove `+"`"+`"NT AUTHORITY\Authenticated Users`+"`"+`" write permissions on files in c:\k"
@@ -7850,9 +7851,9 @@ try
         $cniBinPath = $global:CNIPath
         $cniConfigPath = $global:CNIConfigPath
     }
-    Install-Containerd-Based-On-Kubernetes-Version -ContainerdUrl $global:ContainerdUrl -CNIBinDir $cniBinPath -CNIConfDir $cniConfigPath -KubeDir $global:KubeDir -KubernetesVersion $global:KubeBinariesVersion
+    Logs-To-Events "AKS.WindowsCSE.InstallContainerdBasedOnKubernetesVersion" Install-Containerd-Based-On-Kubernetes-Version -ContainerdUrl $global:ContainerdUrl -CNIBinDir $cniBinPath -CNIConfDir $cniConfigPath -KubeDir $global:KubeDir -KubernetesVersion $global:KubeBinariesVersion
 
-    Retag-ImagesForAzureChinaCloud -TargetEnvironment $TargetEnvironment
+    Logs-To-Events "AKS.WindowsCSE.RetagImagesForAzureChinaCloud" Retag-ImagesForAzureChinaCloud -TargetEnvironment $TargetEnvironment
 
     # For AKSClustomCloud, TargetEnvironment must be set to AzureStackCloud
     Write-Log "Write Azure cloud provider config"
@@ -7928,14 +7929,14 @@ try
 
     # Configure network policy.
     Get-HnsPsm1 -HNSModule $global:HNSModule
-    Import-Module $global:HNSModule
+    Logs-To-Events "AKS.WindowsCSE.ImportHNSModule" Import-Module $global:HNSModule
 
     Write-Log "Installing Azure VNet plugins"
-    Install-VnetPlugins -AzureCNIConfDir $global:AzureCNIConfDir `+"`"+`
+    Logs-To-Events "AKS.WindowsCSE.InstallVnetPlugins" Install-VnetPlugins -AzureCNIConfDir $global:AzureCNIConfDir `+"`"+`
         -AzureCNIBinDir $global:AzureCNIBinDir `+"`"+`
         -VNetCNIPluginsURL $global:VNetCNIPluginsURL
 
-    Set-AzureCNIConfig -AzureCNIConfDir $global:AzureCNIConfDir `+"`"+`
+    Logs-To-Events "AKS.WindowsCSE.SetAzureCNIConfig" Set-AzureCNIConfig -AzureCNIConfDir $global:AzureCNIConfDir `+"`"+`
         -KubeDnsSearchPath $global:KubeDnsSearchPath `+"`"+`
         -KubeClusterCIDR $global:KubeClusterCIDR `+"`"+`
         -KubeServiceCIDR $global:KubeServiceCIDR `+"`"+`
@@ -7944,7 +7945,7 @@ try
         -IsAzureCNIOverlayEnabled $global:IsAzureCNIOverlayEnabled
 
     if ($TargetEnvironment -ieq "AzureStackCloud") {
-        GenerateAzureStackCNIConfig `+"`"+`
+        Logs-To-Events "AKS.WindowsCSE.GenerateAzureStackCNIConfig" GenerateAzureStackCNIConfig `+"`"+`
             -TenantId $global:TenantId `+"`"+`
             -SubscriptionId $global:SubscriptionId `+"`"+`
             -ResourceGroup $global:ResourceGroup `+"`"+`
@@ -7956,9 +7957,9 @@ try
             -IdentitySystem "{{ GetIdentitySystem }}"
     }
 
-    New-ExternalHnsNetwork -IsDualStackEnabled $global:IsDualStackEnabled
+    Logs-To-Events "AKS.WindowsCSE.NewExternalHnsNetwork" New-ExternalHnsNetwork -IsDualStackEnabled $global:IsDualStackEnabled
 
-    Install-KubernetesServices `+"`"+`
+    Logs-To-Events "AKS.WindowsCSE.InstallKubernetesServices" Install-KubernetesServices `+"`"+`
         -KubeDir $global:KubeDir
 
     Write-Log "Disable Internet Explorer compat mode and set homepage"
@@ -8019,10 +8020,10 @@ try
         Remove-Item $kubeConfigFile
     }
 
-    Enable-GuestVMLogs -IntervalInMinutes $global:LogGeneratorIntervalInMinutes
+    Logs-To-Events "AKS.WindowsCSE.EnableGuestVMLogs" Enable-GuestVMLogs -IntervalInMinutes $global:LogGeneratorIntervalInMinutes
 
     Write-Log "Setup Complete, starting NodeResetScriptTask to register Winodws node without reboot"
-    Start-ScheduledTask -TaskName "k8s-restart-job"
+    Logs-To-Events "AKS.WindowsCSE.StartScheduledTask" Start-ScheduledTask -TaskName "k8s-restart-job"
 
     $timeout = 180 ##  seconds
     $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -8052,12 +8053,30 @@ finally
 {
     # Generate CSE result so it can be returned as the CSE response in csecmd.ps1
     $ExecutionDuration=$(New-Timespan -Start $StartTime -End $(Get-Date))
+    $cseFormattedEndTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
+    $eventsFileName=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
     Write-Log "CSE ExecutionDuration: $ExecutionDuration"
 
     # Windows CSE does not return any error message so we cannot generate below content as the response
     # $JsonString = "ExitCode: `+"`"+`"{0}`+"`"+`", Output: `+"`"+`"{1}`+"`"+`", Error: `+"`"+`"{2}`+"`"+`", ExecDuration: `+"`"+`"{3}`+"`"+`"" -f $global:ExitCode, "", $global:ErrorMessage, $ExecutionDuration.TotalSeconds
     Write-Log "Generate CSE result to $CSEResultFilePath : $global:ExitCode"
     echo $global:ExitCode | Out-File -FilePath $CSEResultFilePath -Encoding utf8
+
+    $messageString="ExitCode: $global:ExitCode, E2E: $ExecutionDuration";
+    $eventJson=@"
+{
+    "Timestamp": "$cseFormattedStartTime",
+    "OperationId": "$cseFormattedEndTime",
+    "Version": "1.23",
+    "TaskName": "AKS.WindowsCSE.cse_start",
+    "EventLevel": "Informational",
+    "Message": "$messageString",
+    "EventPid": "0",
+    "EventTid": "0"
+}
+"@
+    echo $eventJson | Set-Content ${global:EventsLoggingDir}${eventsFileName}.json
 
     # Flush stdout to C:\AzureData\CustomDataSetupScript.log
     [Console]::Out.Flush()
@@ -8212,6 +8231,8 @@ $global:StableContainerdPackage = "v1.6.21-azure.1/binaries/containerd-v1.6.21-a
 $global:LatestContainerdPackage = "v1.7.1-azure.1/binaries/containerd-v1.7.1-azure.1-windows-amd64.tar.gz"
 # The latest containerd version that contains stable ABI
 $global:LatestContainerdPackagefor23H2 = "v1.7.9-azure.1/binaries/containerd-v1.7.9-azure.1-windows-amd64.tar.gz"
+
+$global:EventsLoggingDir = "C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.CustomScriptExtension\Events\"
 
 
 # This filter removes null characters (\0) which are captured in nssm.exe output when logged through powershell
@@ -8475,6 +8496,38 @@ function Install-Containerd-Based-On-Kubernetes-Version {
     $ContainerdUrl = $ContainerdUrl + $containerdPackage
   }
   Install-Containerd -ContainerdUrl $ContainerdUrl -CNIBinDir $CNIBinDir -CNIConfDir $CNIConfDir -KubeDir $KubeDir
+}
+
+function Logs-To-Events {
+    $count = $args.Count
+    $cmd = [string]$args[1..$count]
+
+    $task = $args[0]
+    $eventsFileName=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
+    $startTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
+    Invoke-Expression $cmd
+    $ret=$?
+    $endTime=$(Get-Date -Format "yyyy-mm-dd HH:mm:ss.fff")
+
+    $json_string = @"
+    {
+        "Timestamp": "$startTime",
+        "OperationId": "$endTime",
+        "Version": "1.23",
+        "TaskName": "$task",
+        "EventLevel": "Informational",
+        "Message": "Completed: $cmd",
+        "EventPid": "0",
+        "EventTid": "0"
+    }
+"@
+
+    echo $json_string | Set-Content ${EventsLoggingDir}${eventsFileName}.json
+
+    if (-not $ret) {
+        return $ret
+    }
 }`)
 
 func windowsWindowscsehelperPs1Bytes() ([]byte, error) {
